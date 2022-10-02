@@ -13,8 +13,8 @@
 	</modules>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<lucene.version>8.7.0</lucene.version>
-		<elasticsearch.version>7.17.6</elasticsearch.version>
+		<lucene.version>9.3.0</lucene.version>
+		<elasticsearch.version>8.4.2</elasticsearch.version>
 	 <maven.compiler.source>1.8</maven.compiler.source>
 	 <maven.compiler.target>1.8</maven.compiler.target>
 	</properties>

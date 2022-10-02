@@ -14,7 +14,7 @@ public class CustomFrenchStemTokenFilterFactory extends AbstractTokenFilterFacto
         private static final TokenStream EMPTY_TOKEN_STREAM = new EmptyTokenStream();
 
 	public CustomFrenchStemTokenFilterFactory(IndexSettings indexSettings, Environment env, String name, Settings settings) throws IOException {
-		super(indexSettings, name, settings);
+		super(name, settings);
                 create(EMPTY_TOKEN_STREAM).close();
 	}
 
