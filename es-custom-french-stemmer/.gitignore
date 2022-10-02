@@ -1,0 +1,5 @@
+/target/
+/.settings/
+/.classpath
+/.project
+/elasticsearch-5.0.1/

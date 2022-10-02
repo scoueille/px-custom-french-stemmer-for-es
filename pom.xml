@@ -1,0 +1,21 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>fr.proaxian</groupId>
+	<artifactId>px-custom-french-stemmer-for-es</artifactId>
+	<version>0.0.1</version>
+	<packaging>pom</packaging>
+	<name>px-custom-french-stemmer-for-es</name>
+	<description>px-custom-french-stemmer-for-es</description>
+	<modules>
+		<module>es-custom-french-stemmer</module>
+		<module>lucene-custom-french-stemmer</module>
+	</modules>
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<lucene.version>8.7.0</lucene.version>
+		<elasticsearch.version>7.17.6</elasticsearch.version>
+	 <maven.compiler.source>1.8</maven.compiler.source>
+	 <maven.compiler.target>1.8</maven.compiler.target>
+	</properties>
+</project>
