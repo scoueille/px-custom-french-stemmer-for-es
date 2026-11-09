@@ -1,0 +1,96 @@
+name: Plugin stable - compilation et tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# Le workflow lit le dépôt et joint des fichiers à son exécution ; aucun déploiement.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Compiler une archive et vérifier Elasticsearch 9.x
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Installer Java 21 et restaurer le cache Maven
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: '**/pom.xml'
+
+      - name: Lire la version du plugin dans le POM
+        id: version
+        run: |
+          $version = ([xml](Get-Content ./pom.xml -Raw)).project.version
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
+              throw "Version de plugin inattendue dans pom.xml : $version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Compiler et exécuter les tests Maven
+        run: |
+          mvn --batch-mode --no-transfer-progress clean verify
+          if ($LASTEXITCODE -ne 0) { throw 'Échec de la compilation ou des tests Maven.' }
+
+      - name: Préparer le noyau du runner pour les conteneurs Elasticsearch
+        run: |
+          sudo sysctl -w vm.max_map_count=1048576
+          if ($LASTEXITCODE -ne 0) { throw 'Impossible de préparer vm.max_map_count.' }
+
+      # Le script teste successivement ES 9.0.0 et 9.5.6 avec exactement le même ZIP.
+      # Les versions de test sont centralisées dans tools/Test-StablePlugin.ps1.
+      - name: Vérifier le plugin et les formes inclusives dans Elasticsearch
+        run: ./tools/Test-StablePlugin.ps1
+
+      - name: Calculer l'empreinte de l'archive validée
+        env:
+          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $directory = Join-Path $PWD 'es-custom-french-stemmer/target/releases'
+          $filename = "px-custom-french-stemmer-$env:PLUGIN_VERSION-es9.zip"
+          $archive = Join-Path $directory $filename
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText((Join-Path $directory 'SHA256SUMS'),
+              "$hash  $filename`n", [System.Text.UTF8Encoding]::new($false))
+
+      # En cas d'échec, conserver les diagnostics sans proposer un ZIP non validé.
+      - name: Conserver les rapports et journaux de tests
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rapports-tests
+          path: |
+            **/target/surefire-reports/**
+            es-custom-french-stemmer/target/integration/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Proposer l'archive validée au téléchargement
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: px-custom-french-stemmer-${{ steps.version.outputs.version }}-es9
+          path: |
+            es-custom-french-stemmer/target/releases/*.zip
+            es-custom-french-stemmer/target/releases/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90

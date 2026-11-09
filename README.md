@@ -58,6 +58,38 @@ Il conserve les diagnostics dans
 `es-custom-french-stemmer/target/integration/`, puis supprime ses conteneurs.
 Il ne touche à aucun conteneur applicatif existant.
 
+## GitHub Actions
+
+Le workflow **Plugin stable - compilation et tests** s'exécute après un push
+sur `master`, sur les pull requests vers `master` et manuellement avec
+**Actions → Plugin stable - compilation et tests → Run workflow**.
+
+Il compile une seule fois avec Java 21 et Maven, exécute les tests unitaires,
+puis utilise `tools/Test-StablePlugin.ps1` pour tester exactement la même
+archive sur Elasticsearch 9.0.0 et 9.5.6. Ces versions de test sont centralisées
+dans ce script ; ajouter une version au tableau `$ESVersions` permet d'étendre
+les vérifications sans changer la version minimale de l'API dans le POM.
+
+Une fois tous les contrôles réussis, ouvrir l'exécution dans l'onglet **Actions**
+et télécharger l'artefact **px-custom-french-stemmer-VERSION-es9**. Dézipper
+l'artefact GitHub : il contient le ZIP installable du plugin et `SHA256SUMS`.
+Depuis le dossier dézippé, on peut vérifier le fichier avant installation :
+
+```sh
+sha256sum --check SHA256SUMS
+```
+
+L'artefact validé est conservé 90 jours, dans la limite du paramétrage du dépôt.
+Les rapports Maven et journaux Elasticsearch sont conservés 14 jours dans
+**rapports-tests**, y compris lorsqu'un test échoue. Si un contrôle échoue,
+aucune archive validée n'est proposée.
+
+Le workflow utilise le jeton GitHub automatique en lecture seule : aucun
+secret supplémentaire, aucun commit généré ni déploiement sur les serveurs.
+Il produit des artefacts d'exécution, pas une publication GitHub Release.
+Le premier lancement distant nécessite que le fichier
+`.github/workflows/stable-plugin.yml` ait été committé puis poussé sur GitHub.
+
 ## Remplacer le plugin classique sur un serveur
 
 Planifier l'opération et procéder nœud par nœud pour un cluster. Le serveur
