@@ -1,6 +1,7 @@
 # Stemmer français Proaxian pour Elasticsearch
 
-Le filtre `custom_french_stemmer` conserve les règles historiques du projet.
+Le filtre `custom_french_stemmer` adapte le stemming léger français aux métiers.
+La version **0.2.0** corrige certaines familles et les suffixes inclusifs explicites.
 À partir de la version **0.1.0**, il utilise l'API stable des plugins d'analyse
 d'Elasticsearch au lieu de l'API classique.
 
@@ -31,7 +32,7 @@ mvn clean verify
 L'archive installable se trouve dans :
 
 ```text
-es-custom-french-stemmer/target/releases/px-custom-french-stemmer-0.1.0-es9.zip
+es-custom-french-stemmer/target/releases/px-custom-french-stemmer-0.2.0-es9.zip
 ```
 
 Elle contient uniquement les deux JAR du projet,
@@ -40,8 +41,9 @@ Ne pas simplement renommer le descripteur d'une ancienne archive classique.
 
 Les tests figent les sorties de 1 372 termes capturées avant la migration et
 vérifient le respect des mots protégés, la fabrique et les métadonnées stables.
-Le corpus contient volontairement des contre-exemples : il garantit la
-continuité des résultats, pas leur pertinence linguistique parfaite.
+Le corpus historique reste inchangé ; `stemmer-corrections.tsv` énumère les
+seules modifications de résultats autorisées. Les tests linguistiques contrôlent
+les nouvelles équivalences, les contre-exemples et la tokenisation standard.
 
 Pour tester la même archive dans de vrais Elasticsearch 9.0.0 et 9.5.6 :
 
@@ -51,7 +53,8 @@ pwsh -File ./tools/Test-StablePlugin.ps1
 
 Ce test nécessite Docker, télécharge les images officielles si elles manquent,
 et lance des conteneurs jetables sans réseau ni port publié. Il analyse les
-1 372 termes via `_analyze` sur chaque serveur, conserve les diagnostics dans
+termes historiques, corrections et formes inclusives via `_analyze` sur chaque serveur.
+Il conserve les diagnostics dans
 `es-custom-french-stemmer/target/integration/`, puis supprime ses conteneurs.
 Il ne touche à aucun conteneur applicatif existant.
 
@@ -64,15 +67,19 @@ les index dépendants entre la suppression et la réinstallation.
 ```sh
 sudo systemctl stop elasticsearch
 sudo /usr/share/elasticsearch/bin/elasticsearch-plugin remove px-custom-french-stemmer
-sudo /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///chemin/px-custom-french-stemmer-0.1.0-es9.zip
+sudo /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///chemin/px-custom-french-stemmer-0.2.0-es9.zip
 sudo systemctl start elasticsearch
 ```
 
 Conserver l'ancienne archive pour un éventuel retour arrière compatible avec
 la version Elasticsearch du nœud. Installer le plugin sur tous les nœuds concernés.
 Le nom du plugin et le type `custom_french_stemmer` restent identiques :
-aucun changement de définition d'analyseur n'est nécessaire. La migration ne
-modifie pas les radicaux et ne demande pas de réindexation pour ce seul motif.
+aucun changement de définition d'analyseur n'est nécessaire.
+
+**La version 0.2.0 change des radicaux : reconstruire les index concernés.**
+Mettre le plugin à jour sur les nœuds puis réindexer avant de basculer les recherches.
+Un index créé avec 0.1.0 et interrogé avec 0.2.0 peut manquer les mots corrigés.
+La migration technique 0.0.1 → 0.1.0 seule ne nécessitait pas de réindexation.
 
 ```json
 POST /_analyze
@@ -93,7 +100,8 @@ ne convient plus à cette version.
 ## Versions du dépôt
 
 Le même dépôt Git peut conserver l'historique classique et cette migration.
-Le passage à l'API stable constitue une nouvelle version du plugin (0.1.0),
-sans remplacement de l'algorithme. Conserver les anciennes branches ES 7/8 et
+Le passage à l'API stable constitue la version 0.1.0. La version 0.2.0
+apporte les corrections linguistiques détaillées dans CHANGELOG.md.
+Conserver les anciennes branches ES 7/8 et
 publier des tags/archives distincts pour identifier chaque génération.
 

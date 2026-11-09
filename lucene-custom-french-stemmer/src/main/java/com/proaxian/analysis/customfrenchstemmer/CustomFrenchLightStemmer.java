@@ -12,7 +12,11 @@ import static org.apache.lucene.analysis.util.StemmerUtil.*;
  */
 public class CustomFrenchLightStemmer {
     
+  /**
+   * Réduit un mot en place, après reconnaissance des suffixes inclusifs explicites.
+   */
   public int stem(char s[], int len) {
+    len = inclusiveBaseLength(s, len);
     for (int i = 0; i < len; i++)
       switch(s[i]) {
         case '.': 
@@ -121,6 +125,10 @@ public class CustomFrenchLightStemmer {
       return norm(s, len);
     }
     
+    // Le féminin en -teure doit suivre la même règle que le masculin en -teur.
+    if (len > 7 && endsWith(s, len, "teure"))
+      len--;
+
     if (len > 6 && endsWith(s, len, "teur")) {
       len--;
       s[len-1] = 'r';
@@ -133,6 +141,10 @@ public class CustomFrenchLightStemmer {
     if (len > 5 && endsWith(s, len, "eure"))
       return norm(s, len-2);
     
+    // Aligner aussi l'infinitif : dialogue/dialoguer, sans perdre géologue/géologie.
+    if (len > 8 && endsWith(s, len, "loguer"))
+      return norm(s, len-3);
+
     if (len > 7 && endsWith(s, len, "logue"))
       return norm(s, len-2);
     
@@ -219,6 +231,73 @@ public class CustomFrenchLightStemmer {
     return norm(s, len);
   }
 
+  /**
+   * Garde le masculin écrit avant un suffixe inclusif reconnu, sans allonger le tampon.
+   * Les autres points restent traités par la règle historique (node.js, p.h.p.).
+   */
+  private int inclusiveBaseLength(char[] s, int len) {
+    int separator = 0;
+    while (separator < len && Character.isLetter(s[separator])) separator++;
+    if (separator < 3 || separator == len || !isInclusiveSeparator(s[separator]))
+      return len;
+
+    int start = separator + 1;
+    int end = len;
+    // Un pluriel peut être joint au suffixe (rices) ou détaché (rice·s).
+    if (end > start + 1 && s[end-1] == 's' && isInclusiveSeparator(s[end-2]))
+      end -= 2;
+    else if (end > start && s[end-1] == 's')
+      end--;
+
+    boolean detachedPlural = end == start && len == start + 1 && s[start] == 's';
+    if (detachedPlural || suffixEquals(s, start, end, "e")) return separator;
+
+    // Vérifier la terminaison masculine avant d'accepter un suffixe de remplacement.
+    char last = s[separator-1];
+    if ((last == 'n' && suffixEquals(s, start, end, "ne"))
+        || (last == 'l' && suffixEquals(s, start, end, "le"))
+        || (last == 't' && suffixEquals(s, start, end, "te"))
+        || (last == 'f' && suffixEquals(s, start, end, "ve")))
+      return separator;
+
+    if (endsWith(s, separator, "er")
+        && (suffixEquals(s, start, end, "ère") || suffixEquals(s, start, end, "ere")))
+      return separator;
+
+    if (endsWith(s, separator, "eur") && suffixEquals(s, start, end, "euse"))
+      return separator;
+
+    if ((endsWith(s, separator, "eur") || endsWith(s, separator, "eux") || last == 's')
+        && suffixEquals(s, start, end, "se"))
+      return separator;
+
+    if (endsWith(s, separator, "teur")
+        && (suffixEquals(s, start, end, "rice") || suffixEquals(s, start, end, "trice")))
+      return separator;
+
+    return len;
+  }
+
+  /**
+   * Reconnaît uniquement les cinq points déjà pris en charge historiquement.
+   */
+  private boolean isInclusiveSeparator(char ch) {
+    return ch == '.' || ch == '·' || ch == '‧' || ch == '․' || ch == '﹒';
+  }
+
+  /**
+   * Compare une portion du tampon à un suffixe sans créer de chaîne temporaire.
+   */
+  private boolean suffixEquals(char[] s, int start, int end, String suffix) {
+    if (end - start != suffix.length()) return false;
+    for (int i = 0; i < suffix.length(); i++)
+      if (s[start+i] != suffix.charAt(i)) return false;
+    return true;
+  }
+
+  /**
+   * Applique la normalisation historique des accents, doublons et terminaisons.
+   */
   private int norm(char s[], int len) {
     if (len > 4) {
       for (int i = 0; i < len; i++)

@@ -11,7 +11,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $PluginZip) {
-    $PluginZip = Join-Path $repo 'es-custom-french-stemmer/target/releases/px-custom-french-stemmer-0.1.0-es9.zip'
+    $pluginVersion = ([xml](Get-Content (Join-Path $repo 'pom.xml') -Raw)).project.version
+    $PluginZip = Join-Path $repo "es-custom-french-stemmer/target/releases/px-custom-french-stemmer-$pluginVersion-es9.zip"
 }
 $PluginZip = (Resolve-Path -LiteralPath $PluginZip).Path
 $initialHash = (Get-FileHash -LiteralPath $PluginZip -Algorithm SHA256).Hash
@@ -36,6 +37,15 @@ foreach ($line in [System.IO.File]::ReadAllLines($corpus)) {
     $words.Add($fields[0])
     $expected.Add($fields[1])
 }
+# Appliquer seulement les corrections de radicaux explicitement validées.
+$correctionsPath = Join-Path $repo 'lucene-custom-french-stemmer/src/test/resources/stemmer-corrections.tsv'
+foreach ($line in [System.IO.File]::ReadAllLines($correctionsPath)) {
+    if ($line.StartsWith('#')) { continue }
+    $fields = $line.Split("`t", 2)
+    $index = $words.IndexOf($fields[0])
+    if ($index -ge 0) { $expected[$index] = $fields[1] }
+    else { $words.Add($fields[0]); $expected.Add($fields[1]) }
+}
 $request = @{
     tokenizer = 'keyword'
     filter = @('custom_french_stemmer')
@@ -43,6 +53,23 @@ $request = @{
 } | ConvertTo-Json -Depth 5 -Compress
 $requestPath = Join-Path $artifacts 'analyze-request.json'
 [System.IO.File]::WriteAllText($requestPath, $request, [System.Text.UTF8Encoding]::new($false))
+
+$inclusiveWords = [System.Collections.Generic.List[string]]::new()
+$inclusiveExpected = [System.Collections.Generic.List[string]]::new()
+foreach ($line in [System.IO.File]::ReadAllLines($correctionsPath)) {
+    if ($line.StartsWith('#')) { continue }
+    $fields = $line.Split("`t", 2)
+    if ($fields[0] -notmatch '[.·‧․﹒]') { continue }
+    $inclusiveWords.Add($fields[0])
+    $inclusiveExpected.Add($fields[1])
+}
+$inclusiveRequest = @{
+    tokenizer = 'standard'
+    filter = @('lowercase', 'custom_french_stemmer')
+    text = $inclusiveWords.ToArray()
+} | ConvertTo-Json -Depth 5 -Compress
+$inclusiveRequestPath = Join-Path $artifacts 'inclusive-request.json'
+[System.IO.File]::WriteAllText($inclusiveRequestPath, $inclusiveRequest, [System.Text.UTF8Encoding]::new($false))
 
 foreach ($version in $ESVersions) {
     if ($version -notmatch '^9\.\d+\.\d+$') { throw "Version ES 9.x attendue : $version" }
@@ -62,6 +89,7 @@ foreach ($version in $ESVersions) {
         $created = $true
         Invoke-DockerChecked @('cp', $PluginZip, "${name}:/tmp/stemmer.zip") | Out-Null
         Invoke-DockerChecked @('cp', $requestPath, "${name}:/tmp/analyze-request.json") | Out-Null
+        Invoke-DockerChecked @('cp', $inclusiveRequestPath, "${name}:/tmp/inclusive-request.json") | Out-Null
         Invoke-DockerChecked @('start', $name) | Out-Null
 
         # Attendre la disponibilité HTTP ; un arrêt prématuré affiche les journaux.
@@ -93,7 +121,18 @@ foreach ($version in $ESVersions) {
         if ((Get-FileHash -LiteralPath $PluginZip -Algorithm SHA256).Hash -ne $initialHash) {
             throw "L'archive a changé pendant les tests."
         }
-        Write-Host "OK : $version, $($expected.Count) radicaux identiques, même archive."
+        $inclusiveResponse = (Invoke-DockerChecked @('exec', $name, 'curl', '--silent', '--show-error',
+            '--fail', '-H', 'Content-Type: application/json', '--data-binary',
+            '@/tmp/inclusive-request.json', 'http://127.0.0.1:9200/_analyze')) -join "`n"
+        [System.IO.File]::WriteAllText((Join-Path $artifacts "inclusive-$version.json"), $inclusiveResponse)
+        $inclusiveTokens = @(($inclusiveResponse | ConvertFrom-Json).tokens)
+        if ($inclusiveTokens.Count -ne $inclusiveExpected.Count) { throw 'Tokenisation inclusive inattendue.' }
+        for ($index = 0; $index -lt $inclusiveExpected.Count; $index++) {
+            if ($inclusiveTokens[$index].token -cne $inclusiveExpected[$index]) {
+                throw "Forme inclusive différente : $($inclusiveWords[$index])."
+            }
+        }
+        Write-Host "OK : $version, $($expected.Count) radicaux attendus et $($inclusiveExpected.Count) formes inclusives via standard, même archive."
     }
     finally {
         if ($created) {

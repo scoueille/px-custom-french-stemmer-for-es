@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
@@ -17,10 +19,25 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class CustomFrenchStemmerTest {
     /**
-     * Compare 1372 termes au corpus de référence établi avant la migration.
+     * Compare 1372 termes historiques, avec une liste explicite des corrections autorisées.
      */
     @Test
     void preservesHistoricalStems() throws Exception {
+        Map<String, String> corrections = new HashMap<>();
+        try (var reader = new BufferedReader(new InputStreamReader(
+                getClass().getResourceAsStream("/stemmer-corrections.tsv"), StandardCharsets.UTF_8))) {
+            for (String line; (line = reader.readLine()) != null;) {
+                if (line.startsWith("#")) continue;
+                String[] fields = line.split("\t", -1);
+                corrections.put(fields[0], fields[1]);
+            }
+        }
+        // Les nouvelles formes ont elles aussi un résultat explicite, indépendant du code.
+        for (var correction : corrections.entrySet()) {
+            char[] word = correction.getKey().toCharArray();
+            int length = new CustomFrenchLightStemmer().stem(word, word.length);
+            assertEquals(correction.getValue(), new String(word, 0, length), correction.getKey());
+        }
         int count = 0;
         try (var reader = new BufferedReader(new InputStreamReader(
                 getClass().getResourceAsStream("/stemmer-regression.tsv"), StandardCharsets.UTF_8))) {
@@ -29,7 +46,7 @@ class CustomFrenchStemmerTest {
                 String[] fields = line.split("\t", -1);
                 char[] word = fields[0].toCharArray();
                 int length = new CustomFrenchLightStemmer().stem(word, word.length);
-                assertEquals(fields[1], new String(word, 0, length), fields[0]);
+                assertEquals(corrections.getOrDefault(fields[0], fields[1]), new String(word, 0, length), fields[0]);
                 count++;
             }
         }
