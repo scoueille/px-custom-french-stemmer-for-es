@@ -3,11 +3,12 @@ name: Plugin stable - compilation et tests
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
     branches: [master]
   workflow_dispatch:
 
-# Le workflow lit le dépôt et joint des fichiers à son exécution ; aucun déploiement.
+# Lecture seule par défaut ; seul le job de publication d'un tag peut créer une Release.
 permissions:
   contents: read
 
@@ -20,6 +21,8 @@ jobs:
     name: Compiler une archive et vérifier Elasticsearch 9.x
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         shell: pwsh
@@ -43,6 +46,9 @@ jobs:
           $version = ([xml](Get-Content ./pom.xml -Raw)).project.version
           if ($version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
               throw "Version de plugin inattendue dans pom.xml : $version"
+          }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$version") {
+              throw "Le tag $env:GITHUB_REF_NAME ne correspond pas à la version $version du POM."
           }
           "version=$version" >> $env:GITHUB_OUTPUT
 
@@ -94,3 +100,37 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
+
+  release:
+    name: Publier le ZIP validé dans une GitHub Release
+    needs: verify
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # Réutiliser l'archive déjà testée : aucune seconde compilation ici.
+      - name: Télécharger l'archive validée
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: px-custom-french-stemmer-${{ needs.verify.outputs.version }}-es9
+          path: dist
+
+      - name: Vérifier l'empreinte avant publication
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+
+      - name: Créer la Release et joindre le ZIP et son empreinte
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PLUGIN_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "dist/px-custom-french-stemmer-$PLUGIN_VERSION-es9.zip" \
+            dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Plugin $RELEASE_TAG - Elasticsearch 9.x" \
+            --notes "Archive publiée après compilation et réussite des tests unitaires et Elasticsearch. Consulter CHANGELOG.md pour les changements de radicaux et les besoins de réindexation."

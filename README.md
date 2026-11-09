@@ -61,7 +61,7 @@ Il ne touche à aucun conteneur applicatif existant.
 ## GitHub Actions
 
 Le workflow **Plugin stable - compilation et tests** s'exécute après un push
-sur `master`, sur les pull requests vers `master` et manuellement avec
+sur `master`, sur les tags `v*`, sur les pull requests vers `master` et manuellement avec
 **Actions → Plugin stable - compilation et tests → Run workflow**.
 
 Il compile une seule fois avec Java 21 et Maven, exécute les tests unitaires,
@@ -84,9 +84,36 @@ Les rapports Maven et journaux Elasticsearch sont conservés 14 jours dans
 **rapports-tests**, y compris lorsqu'un test échoue. Si un contrôle échoue,
 aucune archive validée n'est proposée.
 
-Le workflow utilise le jeton GitHub automatique en lecture seule : aucun
-secret supplémentaire, aucun commit généré ni déploiement sur les serveurs.
-Il produit des artefacts d'exécution, pas une publication GitHub Release.
+Le workflow utilise le jeton GitHub automatique : aucun secret supplémentaire,
+aucun commit généré ni déploiement sur les serveurs. Les tests restent en lecture
+seule ; seul le job de publication d'un tag peut écrire une GitHub Release.
+
+### Publier une version installable depuis une URL
+
+Après avoir mis à jour la version dans les POM et committé les sources :
+
+```sh
+git tag -a v0.2.0 -m "Version 0.2.0"
+git push origin master v0.2.0
+```
+
+Le tag doit correspondre exactement à `v` suivi de la version du POM, sinon
+le workflow échoue. Une fois tous les tests réussis, un second job récupère
+exactement l'archive testée, revérifie son empreinte et publie une GitHub Release
+contenant le ZIP et `SHA256SUMS`. Les simples push de branche et lancements
+manuels produisent seulement les artefacts Actions.
+
+Après publication de `v0.2.0`, une première installation peut utiliser :
+
+```sh
+sudo /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch \
+  'https://github.com/scoueille/px-custom-french-stemmer-for-es/releases/download/v0.2.0/px-custom-french-stemmer-0.2.0-es9.zip'
+```
+
+Pour remplacer un plugin existant, suivre la procédure d'arrêt et remplacement
+ci-dessous. Les archives des Releases restent disponibles tant que la Release
+est conservée ; elles ne dépendent pas de la rétention des artefacts Actions.
+
 Le premier lancement distant nécessite que le fichier
 `.github/workflows/stable-plugin.yml` ait été committé puis poussé sur GitHub.
 
