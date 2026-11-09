@@ -6,7 +6,7 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.KeywordAttribute;
 
-public class CustomFrenchStemTokenFilter extends TokenFilter {
+public final class CustomFrenchStemTokenFilter extends TokenFilter {
 
   private final CustomFrenchLightStemmer stemmer = new CustomFrenchLightStemmer();
   private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);

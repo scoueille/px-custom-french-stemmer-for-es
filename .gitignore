@@ -1,0 +1,2 @@
+# Résultats Maven locaux, jamais nécessaires dans les sources.
+**/target/

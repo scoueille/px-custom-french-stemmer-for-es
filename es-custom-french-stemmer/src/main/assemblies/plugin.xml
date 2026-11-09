@@ -1,31 +1,19 @@
-<?xml version="1.0"?>
-<assembly>
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 https://maven.apache.org/xsd/assembly-2.2.0.xsd">
     <id>plugin</id>
-    <formats>
-        <format>zip</format>
-    </formats>
+    <formats><format>zip</format></formats>
     <includeBaseDirectory>false</includeBaseDirectory>
     <files>
-        <file>
-            <source>${project.basedir}/src/main/resources/plugin-descriptor.properties</source>
-            <filtered>true</filtered>
-        </file>
+        <!-- Les deux métadonnées doivent être à la racine du ZIP stable. -->
+        <file><source>${project.build.outputDirectory}/stable-plugin-descriptor.properties</source></file>
+        <file><source>${project.build.outputDirectory}/named_components.json</source></file>
     </files>
     <dependencySets>
-         <dependencySet>
-            <useProjectArtifact>true</useProjectArtifact>
-            <useTransitiveFiltering>true</useTransitiveFiltering>
-            <excludes>
-                <exclude>org.elasticsearch:elasticsearch</exclude>
-                <exclude>org.apache.lucene:*</exclude>
-                <exclude>org.apache.logging.log4j:*</exclude>
-                <!--<exclude>org.slf4j:*</exclude>-->
-            </excludes>
-        </dependencySet>
         <dependencySet>
             <useProjectArtifact>true</useProjectArtifact>
-            <useTransitiveFiltering>true</useTransitiveFiltering>
+            <scope>runtime</scope>
             <includes>
+                <include>org.elasticsearch:es-custom-french-stemmer</include>
                 <include>com.proaxian:lucene-custom-french-stemmer</include>
             </includes>
         </dependencySet>

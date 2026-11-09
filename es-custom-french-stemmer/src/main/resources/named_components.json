@@ -1,0 +1,5 @@
+{
+  "org.elasticsearch.plugin.analysis.TokenFilterFactory": {
+    "custom_french_stemmer": "com.proaxian.elasticsearch.analysis.CustomFrenchStemTokenFilterFactory"
+  }
+}
